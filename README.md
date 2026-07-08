@@ -63,6 +63,8 @@ node --env-file=.env scripts/test-e2e.js
 
 ## License
 
+Copyright 2026 Sean (seandck).
+
 Licensed under the [PolyForm Noncommercial License 1.0.0](./LICENSE).
 
 You are free to **self-host, use, modify, and redistribute** this software for
