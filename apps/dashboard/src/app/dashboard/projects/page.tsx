@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getProjects, createProject, deleteProject } from '../../actions';
 import Link from 'next/link';
+import { useTranslation } from '../../../lib/i18n';
 
 interface Project {
   id: string;
@@ -12,6 +13,7 @@ interface Project {
 }
 
 export default function ProjectsPage() {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -75,7 +77,7 @@ export default function ProjectsPage() {
         {/* Card 1: Total Projects */}
         <div className="card-flat p-5 space-y-2 relative overflow-hidden">
           <div className="flex justify-between items-start text-neutral-400 text-xs uppercase">
-            <span>Total Projects</span>
+            <span>{t('totalProjects')}</span>
             <span className="text-[10px] bg-[#1a1a1f] px-1.5 py-0.5 rounded text-white font-bold border border-[#27272a]">
               active
             </span>
@@ -91,7 +93,7 @@ export default function ProjectsPage() {
         {/* Card 2: Active Gates */}
         <div className="card-flat p-5 space-y-2 relative overflow-hidden">
           <div className="flex justify-between items-start text-neutral-400 text-xs uppercase">
-            <span>Active Gates</span>
+            <span>{t('activeGates')}</span>
             <span className="text-[10px] text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 rounded font-bold border border-emerald-500/10">
               online
             </span>
@@ -107,7 +109,7 @@ export default function ProjectsPage() {
         {/* Card 3: Gateway Health */}
         <div className="card-flat p-5 space-y-2 relative overflow-hidden">
           <div className="flex justify-between items-start text-neutral-400 text-xs uppercase">
-            <span>Gateway Health</span>
+            <span>{t('gatewayHealth')}</span>
             <span className="text-[10px] text-purple-400 bg-purple-500/5 px-1.5 py-0.5 rounded font-bold border border-purple-500/10">
               100%
             </span>
@@ -125,7 +127,7 @@ export default function ProjectsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Create Project Form */}
         <div className="card-flat p-6 h-fit bg-[#0c0c0e]/40">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Create Namespace</h2>
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-1">{t('createNamespace')}</h2>
           <p className="text-[10px] text-neutral-500 mb-6">Provision a new isolated sandbox</p>
 
           {error && (
@@ -136,7 +138,7 @@ export default function ProjectsPage() {
 
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-2">Namespace Name</label>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-2">{t('namespaceName')}</label>
               <input
                 type="text"
                 value={name}
@@ -147,7 +149,7 @@ export default function ProjectsPage() {
               />
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-2">Namespace Slug</label>
+              <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-2">{t('namespaceSlug')}</label>
               <input
                 type="text"
                 value={slug}
@@ -166,20 +168,20 @@ export default function ProjectsPage() {
               disabled={creating}
               className="w-full py-2 px-4 rounded bg-white hover:bg-neutral-200 text-black font-semibold text-xs transition-all"
             >
-              {creating ? 'Creating...' : 'Register Project'}
+              {creating ? t('connecting') : t('registerProject')}
             </button>
           </form>
         </div>
 
         {/* Right Column: Project namespaces list */}
         <div className="lg:col-span-2 space-y-4">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-1">Registered Namespaces</h2>
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-1">{t('registeredNamespaces')}</h2>
 
           {loading ? (
-            <div className="text-neutral-500 text-center py-20 text-xs">Loading projects...</div>
+            <div className="text-neutral-500 text-center py-20 text-xs">{t('loadingProjects')}</div>
           ) : projects.length === 0 ? (
             <div className="card-flat p-12 text-center text-neutral-500 text-xs">
-              No registered API namespaces. Configure one using the form on the left.
+              {t('noNamespaces')}
             </div>
           ) : (
             projects.map((proj) => (
@@ -205,12 +207,12 @@ export default function ProjectsPage() {
                     href={`/dashboard/projects/${proj.slug}/endpoints`}
                     className="px-3 py-1.5 rounded bg-[#27272a] hover:bg-[#3f3f46] text-white text-[10px] font-semibold border border-[#3f3f46]/40 transition-colors"
                   >
-                    Manage Endpoints
+                    {t('manageEndpoints')}
                   </Link>
                   <button
                     onClick={() => handleDelete(proj.id)}
                     className="p-1.5 rounded bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-500/25 transition-all text-xs"
-                    title="Delete Project"
+                    title={t('delete')}
                   >
                     🗑️
                   </button>

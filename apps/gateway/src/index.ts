@@ -6,11 +6,50 @@ import { matchRoute } from './matcher.js';
 import { startLogPruner } from './cron.js';
 import { executeScriptInSandbox } from './sandbox.js';
 import { loggerBuffer } from './logger-buffer.js';
+import { decrypt } from './crypto.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// Dynamic CORS configuration delegate querying DB configuration dynamically
+const corsOptionsDelegate = async (req: any, callback: any) => {
+  const parts = req.path.split('/');
+  // Match path /mock/:projectSlug/*
+  if (parts[1] === 'mock' && parts[2]) {
+    const projectSlug = parts[2];
+    try {
+      const project = await prisma.project.findUnique({
+        where: { slug: projectSlug },
+      });
+
+      if (project) {
+        let origin: any = true;
+        if (project.corsOrigins) {
+          if (project.corsOrigins === '*') {
+            origin = '*';
+          } else {
+            origin = project.corsOrigins.split(',').map((o: string) => o.trim());
+          }
+        }
+
+        const corsOptions = {
+          origin,
+          methods: project.corsMethods ? project.corsMethods.split(',').map((m: string) => m.trim().toUpperCase()) : ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+          allowedHeaders: project.corsHeaders ? project.corsHeaders.split(',').map((h: string) => h.trim()) : undefined,
+          credentials: project.corsCredentials,
+        };
+        return callback(null, corsOptions);
+      }
+    } catch (e) {
+      console.error('[CORS-DELEGATE] Error resolving custom CORS from database:', e);
+    }
+  }
+
+  // Fallback default CORS policy
+  callback(null, { origin: true });
+};
+
+app.use(cors(corsOptionsDelegate));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -35,17 +74,35 @@ app.all('/mock/:projectSlug/*', mockLimiter, async (req, res) => {
   const startTime = Date.now();
 
   try {
-    // 1. Fetch project and its endpoints
+    // 1. Fetch project and its endpoints, including Secrets relation
     const project = await prisma.project.findUnique({
       where: { slug: projectSlug },
-      include: { endpoints: true },
+      include: {
+        endpoints: true,
+        secrets: true,
+      },
     });
 
     if (!project) {
       return res.status(404).json({ error: `Mock Project '${projectSlug}' not found` });
     }
 
-    // 2. Match requested path against project endpoints
+    // 2. Security Auth Gate (API Key Verification - Phase 4)
+    if (project.enforceApiKey) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized: Missing API Key' });
+      }
+      const token = authHeader.substring(7);
+      const apiKey = await prisma.apiKey.findFirst({
+        where: { key: token, projectId: project.id },
+      });
+      if (!apiKey) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
+      }
+    }
+
+    // 3. Match requested path against project endpoints
     const match = matchRoute(method, mockPath, project.endpoints);
 
     if (!match) {
@@ -61,7 +118,15 @@ app.all('/mock/:projectSlug/*', mockLimiter, async (req, res) => {
     let resBody = endpoint.responseBody || '';
     let executionError: string | null = null;
 
-    // 3. Execute Script inside Sandbox if defined
+    // 4. Decrypt Project environment secrets (Phase 2)
+    const decryptedSecrets: Record<string, string> = {};
+    if (project.secrets) {
+      project.secrets.forEach((sec: { key: string; encryptedValue: string }) => {
+        decryptedSecrets[sec.key] = decrypt(sec.encryptedValue);
+      });
+    }
+
+    // 5. Execute Script inside Sandbox if defined
     if (endpoint.script) {
       const reqContext = {
         method,
@@ -72,7 +137,7 @@ app.all('/mock/:projectSlug/*', mockLimiter, async (req, res) => {
       };
 
       try {
-        const sandboxedRes = await executeScriptInSandbox(reqContext, endpoint.script);
+        const sandboxedRes = await executeScriptInSandbox(reqContext, endpoint.script, decryptedSecrets);
         statusCode = sandboxedRes.statusCode;
         resHeaders = { ...resHeaders, ...sandboxedRes.headers };
         resBody = sandboxedRes.body;
@@ -113,6 +178,36 @@ app.all('/mock/:projectSlug/*', mockLimiter, async (req, res) => {
       resBody: typeof resBody === 'object' ? JSON.stringify(resBody) : resBody,
       duration,
     });
+
+    // Dispatch out-of-band Webhook (Phase 3)
+    if (project.webhookUrl) {
+      const webhookPayload = {
+        event: 'request.logged',
+        project: project.slug,
+        request: {
+          method,
+          path: req.originalUrl,
+          headers: req.headers,
+          query: req.query,
+          body: req.body,
+        },
+        response: {
+          status: statusCode,
+          headers: resHeaders,
+          body: typeof resBody === 'object' ? JSON.stringify(resBody) : resBody,
+        },
+        duration,
+        timestamp: new Date().toISOString(),
+      };
+
+      fetch(project.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(webhookPayload),
+      }).catch((e: any) => {
+        console.error(`[WEBHOOK-ERROR] failed to dispatch to ${project.webhookUrl}:`, e.message);
+      });
+    }
 
     // Return response
     if (typeof resBody === 'string') {

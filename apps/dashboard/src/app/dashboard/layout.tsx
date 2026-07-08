@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from '../../lib/i18n';
 
 export default function DashboardLayout({
   children,
@@ -11,6 +13,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   const handleLogout = async () => {
     try {
@@ -46,7 +49,7 @@ export default function DashboardLayout({
               className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded bg-[#27272a] hover:bg-[#3f3f46] text-white text-xs font-semibold border border-[#3f3f46]/30 transition-all"
             >
               <span>+</span>
-              <span>New Project</span>
+              <span>{t('createProject')}</span>
             </Link>
             <Link
               href="/dashboard/projects"
@@ -68,20 +71,20 @@ export default function DashboardLayout({
               }`}
             >
               <span>📂</span>
-              <span>Projects Namespaces</span>
+              <span>{t('projects')}</span>
             </Link>
           </nav>
 
           {/* Menu Section 2 (Documents Header style) */}
           <div>
-            <span className="px-3 text-[10px] uppercase font-bold text-neutral-500 tracking-wider block mb-2">Systems Log</span>
+            <span className="px-3 text-[10px] uppercase font-bold text-neutral-500 tracking-wider block mb-2">{t('systemLogs')}</span>
             <nav className="space-y-1">
               <Link
                 href="/dashboard/projects" // fallback or direct logs
                 className={`flex items-center space-x-3 px-3 py-2 rounded text-xs transition-all text-neutral-400 hover:bg-[#18181b]/50 hover:text-neutral-200 border border-transparent`}
               >
                 <span>📋</span>
-                <span>Realtime Logger</span>
+                <span>{t('syncLogger')}</span>
               </Link>
             </nav>
           </div>
@@ -103,7 +106,7 @@ export default function DashboardLayout({
             className="w-full flex items-center space-x-2 px-3 py-2 rounded text-xs text-neutral-500 hover:text-red-400 hover:bg-red-500/5 transition-all text-left"
           >
             <span>🚪</span>
-            <span>Sign Out</span>
+            <span>{t('logout')}</span>
           </button>
         </div>
       </aside>
@@ -111,17 +114,20 @@ export default function DashboardLayout({
       {/* Main View Area */}
       <div className="flex-1 flex flex-col overflow-hidden bg-[#09090b]">
         {/* Top Header bar with exact Sidebar Toggle style */}
-        <header className="h-12 border-b border-[#1f1f23] bg-[#0c0c0e]/30 backdrop-blur-md flex items-center px-6 space-x-3 z-10">
-          {/* Sidebar Toggle icon */}
-          <button className="text-neutral-400 hover:text-white transition-colors" title="Toggle Sidebar">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          
-          <span className="text-neutral-600">|</span>
-          
-          <span className="text-xs text-neutral-300 font-semibold uppercase">API Engine Console</span>
+        <header className="h-12 border-b border-[#1f1f23] bg-[#0c0c0e]/30 backdrop-blur-md flex items-center justify-between px-6 z-10">
+          <div className="flex items-center space-x-3">
+            {/* Sidebar Toggle icon */}
+            <button className="text-neutral-400 hover:text-white transition-colors" title="Toggle Sidebar">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="text-neutral-600">|</span>
+            <span className="text-xs text-neutral-300 font-semibold uppercase">API Engine Console</span>
+          </div>
+
+          {/* i18n Switcher */}
+          <LanguageSwitcher />
         </header>
 
         {/* View content */}

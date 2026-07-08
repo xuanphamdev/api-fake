@@ -16,13 +16,53 @@ model User {
 }
 
 model Project {
-  id        String     @id @default(uuid())
+  id             String                @id @default(uuid())
+  name           String
+  slug           String                @unique
+  userId         String
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoints      Endpoint[]
+  secrets        ProjectSecret[]
+  collaborators  ProjectCollaborator[]
+  apiKeys        ApiKey[]
+  corsOrigins    String?
+  corsHeaders    String?
+  corsMethods    String?
+  corsCredentials Boolean              @default(false)
+  enforceApiKey  Boolean               @default(false)
+  webhookUrl     String?
+  createdAt      DateTime              @default(now())
+}
+
+model ProjectSecret {
+  id             String   @id @default(uuid())
+  key            String
+  encryptedValue String
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@unique([projectId, key])
+}
+
+model ProjectCollaborator {
+  id        String   @id @default(uuid())
+  email     String
+  role      String   // "READ" | "WRITE"
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, email])
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
   name      String
-  slug      String     @unique
-  userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoints Endpoint[]
-  createdAt DateTime   @default(now())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 model Endpoint {
@@ -58,5 +98,5 @@ model ApiLog {
   duration    Int
   timestamp   DateTime  @default(now())
 
-  @@index([timestamp])
+  @@index([timestamp, resStatus])
 }

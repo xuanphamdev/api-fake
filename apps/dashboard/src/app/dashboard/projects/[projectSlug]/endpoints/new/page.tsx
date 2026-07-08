@@ -24,7 +24,7 @@ export default function NewEndpointPage() {
   useEffect(() => {
     async function fetchProject() {
       const list = await getProjects();
-      const proj = list.find((p) => p.slug === projectSlug);
+      const proj = list.find((p: { id: string; slug: string }) => p.slug === projectSlug);
       if (proj) {
         setProjectId(proj.id);
       }

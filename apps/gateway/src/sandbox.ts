@@ -9,7 +9,8 @@ export interface SandboxResponse {
 
 export function executeScriptInSandbox(
   req: any,
-  script: string
+  script: string,
+  secrets: Record<string, string> = {}
 ): Promise<SandboxResponse> {
   return new Promise((resolve, reject) => {
     // Resolve path to the compiled worker JS file in the dist directory
@@ -22,7 +23,7 @@ export function executeScriptInSandbox(
       reject(new Error('Sandbox execution exceeded backup timeout threshold (150ms)'));
     }, 1500);
 
-    worker.postMessage({ req, script });
+    worker.postMessage({ req, script, secrets });
 
     worker.on('message', (result: { response?: SandboxResponse; error?: string }) => {
       clearTimeout(backupTimeout);

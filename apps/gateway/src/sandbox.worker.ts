@@ -5,12 +5,12 @@ if (!parentPort) {
   throw new Error('This file must be run as a worker thread');
 }
 
-parentPort.on('message', async (message: { req: any; script: string }) => {
-  const { req, script } = message;
+parentPort.on('message', async (message: { req: any; script: string; secrets?: Record<string, string> }) => {
+  const { req, script, secrets = {} } = message;
 
-  let QuickJS;
-  let runtime;
-  let context;
+  let QuickJS: any;
+  let runtime: any;
+  let context: any;
 
   try {
     QuickJS = await getQuickJS();
@@ -23,6 +23,49 @@ parentPort.on('message', async (message: { req: any; script: string }) => {
     runtime.setInterruptHandler(() => {
       return Date.now() - startTime > 100; // Return true to interrupt execution
     });
+
+    // 1. Bind Cryptographic JWT Signing Host Function
+    const jwtSignHandle = context.newFunction('jwtSign', (payloadStrHandle: any, secretStrHandle: any) => {
+      const payloadStr = context.getString(payloadStrHandle);
+      const secret = context.getString(secretStrHandle);
+      const crypto = require('crypto');
+      
+      const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+      const payloadEncoded = Buffer.from(payloadStr).toString('base64url');
+      const signature = crypto.createHmac('sha256', secret)
+        .update(`${header}.${payloadEncoded}`)
+        .digest('base64url');
+      
+      return context.newString(`${header}.${payloadEncoded}.${signature}`);
+    });
+    context.setProp(context.global, 'jwtSign', jwtSignHandle);
+    jwtSignHandle.dispose();
+
+    // 2. Bind Cryptographic JWT Verification Host Function
+    const jwtVerifyHandle = context.newFunction('jwtVerify', (tokenHandle: any, secretHandle: any) => {
+      const token = context.getString(tokenHandle);
+      const secret = context.getString(secretHandle);
+      const crypto = require('crypto');
+      
+      const parts = token.split('.');
+      if (parts.length !== 3) return context.newBool(false);
+      const [header, payload, signature] = parts;
+      
+      const computedSignature = crypto.createHmac('sha256', secret)
+        .update(`${header}.${payload}`)
+        .digest('base64url');
+      
+      if (signature !== computedSignature) return context.newBool(false);
+      
+      try {
+        const decodedPayload = Buffer.from(payload, 'base64url').toString('utf8');
+        return context.newString(decodedPayload);
+      } catch (e) {
+        return context.newBool(false);
+      }
+    });
+    context.setProp(context.global, 'jwtVerify', jwtVerifyHandle);
+    jwtVerifyHandle.dispose();
 
     // Sandbox environment skeleton setup
     const prefix = `
@@ -50,9 +93,19 @@ parentPort.on('message', async (message: { req: any; script: string }) => {
             _res.body = String(payload);
           }
           return this;
+        },
+        jwt: {
+          sign(payload, secret) {
+            return jwtSign(JSON.stringify(payload), String(secret));
+          },
+          verify(token, secret) {
+            const raw = jwtVerify(String(token), String(secret));
+            return raw ? JSON.parse(raw) : null;
+          }
         }
       };
       const req = ${JSON.stringify(req)};
+      req.env = ${JSON.stringify(secrets)};
     `;
 
     const suffix = `\nJSON.stringify(_res);`;
