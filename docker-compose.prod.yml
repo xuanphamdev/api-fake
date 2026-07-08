@@ -1,0 +1,85 @@
+# Production compose for a SHARED server that already runs a reverse proxy
+# (e.g. Nginx Proxy Manager) on host :80/:443.
+#
+# Hardened vs. the default compose:
+#   - DB and app ports are NOT published to the host (internal network only).
+#   - Caddy is published only on 127.0.0.1:8090; the host proxy forwards the
+#     public domain (with TLS) to http://127.0.0.1:8090.
+#
+# Usage on the server:
+#   cp .env.production.example .env   # then fill in real secrets
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: api-fake-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-apifake}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-apifake}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: applies Prisma migrations before app services start.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: api-fake-migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+    command: ["npx", "prisma", "migrate", "deploy", "--schema=packages/db/prisma/schema.prisma"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: api-fake-dashboard
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Must match gateway's ENCRYPTION_KEY — dashboard encrypts, gateway decrypts.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gateway
+    container_name: api-fake-gateway
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Must match dashboard's ENCRYPTION_KEY.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: api-fake-proxy
+    # Bind to loopback only; the host's public reverse proxy forwards to this.
+    ports:
+      - "127.0.0.1:8090:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - dashboard
+      - gateway
+
+volumes:
+  pgdata:
