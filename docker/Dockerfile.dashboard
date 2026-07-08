@@ -1,0 +1,20 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache openssl libc6-compat
+COPY package*.json ./
+COPY apps/dashboard/package*.json ./apps/dashboard/
+COPY apps/gateway/package*.json ./apps/gateway/
+COPY packages/db/package*.json ./packages/db/
+RUN npm ci
+
+COPY . .
+RUN npm run build:db
+RUN npm run build:dashboard
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+RUN apk add --no-cache openssl libc6-compat
+COPY --from=builder /app ./
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["npm", "start", "-w", "apps/dashboard"]

@@ -1,0 +1,18 @@
+{
+  "name": "api-fake-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:db": "npm run build -w packages/db",
+    "build:dashboard": "npm run build -w apps/dashboard",
+    "build:gateway": "npm run build -w apps/gateway",
+    "build": "npm run build:db && npm run build:dashboard && npm run build:gateway"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+:80 {
+    # Route all dashboard dashboard requests directly to Next.js dashboard app
+    reverse_proxy /dashboard* dashboard:3000
+
+    # Route all other wildcard requests to the Gateway
+    reverse_proxy /* gateway:3001
+}
