@@ -1,6 +1,7 @@
 # Site address comes from the DOMAIN env var (set in .env).
-# A real hostname enables automatic HTTPS; unset defaults to :80 for local use.
-{$DOMAIN} {
+# A real hostname enables automatic HTTPS; unset defaults to :80 (used when a
+# host reverse proxy terminates TLS and forwards plain HTTP to this service).
+{$DOMAIN::80} {
     # Route all dashboard requests directly to the Next.js dashboard app
     reverse_proxy /dashboard* dashboard:3000
 
