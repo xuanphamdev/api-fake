@@ -5,18 +5,32 @@ services:
     image: postgres:16-alpine
     container_name: api-fake-db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: apifake
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-apifake}
     ports:
       - "5416:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d apifake"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-apifake}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # One-shot: applies Prisma migrations before app services start.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: api-fake-migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/apifake?schema=public}
+    command: ["npx", "prisma", "migrate", "deploy", "--schema=packages/db/prisma/schema.prisma"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
 
   dashboard:
     build:
@@ -24,14 +38,16 @@ services:
       dockerfile: docker/Dockerfile.dashboard
     container_name: api-fake-dashboard
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/apifake?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/apifake?schema=public}
       NODE_ENV: production
-      JWT_SECRET: super-secret-random-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:-super-secret-random-key-change-in-production}
+      # Must match gateway's ENCRYPTION_KEY — dashboard encrypts secrets, gateway decrypts.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-default-encryption-salt-key-32-b}
     ports:
       - "3000:3000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   gateway:
     build:
@@ -39,24 +55,35 @@ services:
       dockerfile: docker/Dockerfile.gateway
     container_name: api-fake-gateway
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/apifake?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/apifake?schema=public}
       NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-super-secret-random-key-change-in-production}
+      # Must match dashboard's ENCRYPTION_KEY.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-default-encryption-salt-key-32-b}
     ports:
       - "3001:3001"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   caddy:
     image: caddy:2-alpine
     container_name: api-fake-proxy
+    environment:
+      # Set DOMAIN in .env for automatic HTTPS; defaults to :80 for local use.
+      DOMAIN: ${DOMAIN:-:80}
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - dashboard
       - gateway
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

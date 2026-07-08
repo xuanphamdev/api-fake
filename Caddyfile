@@ -1,5 +1,7 @@
-:80 {
-    # Route all dashboard dashboard requests directly to Next.js dashboard app
+# Site address comes from the DOMAIN env var (set in .env).
+# A real hostname enables automatic HTTPS; unset defaults to :80 for local use.
+{$DOMAIN} {
+    # Route all dashboard requests directly to the Next.js dashboard app
     reverse_proxy /dashboard* dashboard:3000
 
     # Route all other wildcard requests to the Gateway
