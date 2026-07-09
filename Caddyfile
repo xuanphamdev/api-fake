@@ -2,6 +2,9 @@
 # A real hostname enables automatic HTTPS; unset defaults to :80 (used when a
 # host reverse proxy terminates TLS and forwards plain HTTP to this service).
 {$DOMAIN::80} {
+    # Send the bare root to the dashboard (avoids the gateway's "Cannot GET /")
+    redir / /dashboard 302
+
     # Route all dashboard requests directly to the Next.js dashboard app
     reverse_proxy /dashboard* dashboard:3000
 
